@@ -1,0 +1,29 @@
+name: AMI Build
+
+on:
+  pull_request:
+    branches: [ master ]
+    types:
+    - "labeled"
+    - "opened"
+    - "synchronize"
+    - "reopened"
+
+jobs:
+  build:
+    if: contains(github.event.pull_request.labels.*.name, 'buildable')  
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - K8S_VERSION: "1.18"
+          - K8S_VERSION: "1.19"
+          - K8S_VERSION: "1.20"
+          - K8S_VERSION: "1.21"
+    name: Test ${{ matrix.TEST_NAME }} ${{ matrix.AWS_CLI_VERSION }}
+    steps:
+      - name: Install AWS CLI
+        uses: unfor19/install-aws-cli-action@latestv2
+      - uses: actions/checkout@v2
+      - name: Build ${{ matrix.K8S_VERSION }} AMI
+        run: make ${{ matrix.K8S_VERSION }}
