@@ -22,7 +22,7 @@ jobs:
           - K8S_VERSION: "1.21"
     steps:
       - name: Install AWS CLI
-        uses: unfor19/install-aws-cli-action@latestv2
+        uses: unfor19/install-aws-cli-action@master
       - uses: actions/checkout@v2
       - name: ${{ matrix.K8S_VERSION }}
         run: make ${{ matrix.K8S_VERSION }}
