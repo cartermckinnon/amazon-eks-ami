@@ -10,11 +10,16 @@ on:
     - "reopened"
 
 jobs:
-  require-labels:
+  verify-labels:
     runs-on: ubuntu-latest
-    name: Require labels
-    uses: jesusvasquez333/verify-pr-label-action@latest
-    with:
-        github-token: '${{ secrets.GITHUB_TOKEN }}'
-        valid-labels: 'buildable'
-        pull-request-number: '${{ github.event.pull_request.number }}'
+    name: Verify that the PR has all required labels
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Verify PR label action
+        uses: jesusvasquez333/verify-pr-label-action@v1.4.0
+        id: verify-pr-labels
+        with:
+          valid-labels: 'buildable'
+          pull-request-number: '${{ github.event.pull_request.number }}'
+          disable-reviews: true
