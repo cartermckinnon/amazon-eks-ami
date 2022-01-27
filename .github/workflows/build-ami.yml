@@ -20,7 +20,7 @@ jobs:
           - K8S_VERSION: "1.19"
           - K8S_VERSION: "1.20"
           - K8S_VERSION: "1.21"
-    name: Test ${{ matrix.TEST_NAME }} ${{ matrix.AWS_CLI_VERSION }}
+    name: Build
     steps:
       - name: Install AWS CLI
         uses: unfor19/install-aws-cli-action@latestv2
