@@ -1,0 +1,16 @@
+name: Mirror commits to our internal repository on CodeCommit.
+
+on:
+  push:
+    branches:    
+      - 'main'
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - run: git remote add mirror https://git-codecommit.us-west-2.amazonaws.com/v1/repos/amazon-eks-ami-mirror
+      - run: git push mirror
