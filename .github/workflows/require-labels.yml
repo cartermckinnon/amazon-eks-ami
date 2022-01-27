@@ -1,0 +1,20 @@
+name: Require pull request labels
+
+on:
+  pull_request:
+    branches: [ master ]
+    types:
+    - "labeled"
+    - "unlabeled"
+    - "opened"
+    - "reopened"
+
+jobs:
+  require-labels:
+    runs-on: ubuntu-latest
+    name: Require labels
+    uses: jesusvasquez333/verify-pr-label-action@latest
+    with:
+        github-token: '${{ secrets.GITHUB_TOKEN }}'
+        valid-labels: 'buildable'
+        pull-request-number: '${{ github.event.pull_request.number }}'
