@@ -4,14 +4,12 @@ on:
   pull_request:
     branches: [ master ]
     types:
-    - "labeled"
     - "opened"
     - "synchronize"
     - "reopened"
 
 jobs:
   build:
-    if: contains(github.event.pull_request.labels.*.name, 'buildable')  
     runs-on: ubuntu-latest
     strategy:
       matrix:
