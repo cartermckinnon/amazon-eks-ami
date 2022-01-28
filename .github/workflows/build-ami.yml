@@ -19,8 +19,11 @@ jobs:
           - K8S_VERSION: "1.20"
           - K8S_VERSION: "1.21"
     steps:
-      - name: Install AWS CLI
-        uses: unfor19/install-aws-cli-action@master
       - uses: actions/checkout@v2
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: us-west-2
+          role-to-assume: arn:aws:iam::380217597436:role/github-actions-role-Role-1SS1G46UVILIE      
       - name: ${{ matrix.K8S_VERSION }}
         run: make ${{ matrix.K8S_VERSION }}
