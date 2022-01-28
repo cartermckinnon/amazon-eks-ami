@@ -1,0 +1,27 @@
+name: Mirror commits to our internal repository on CodeCommit.
+
+on:
+  push:
+    branches:    
+      - 'master'
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    # These permissions are needed to interact with GitHub's OIDC Token endpoint.
+    permissions:
+      id-token: write
+      contents: read    
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: us-west-2
+          role-to-assume: arn:aws:iam::380217597436:role/github-actions-role-Role-1SS1G46UVILIE
+      - run: git config credential.helper '!aws codecommit credential-helper $@'
+      - run: git config credential.UseHttpPath true
+      - run: git remote add mirror https://git-codecommit.us-west-2.amazonaws.com/v1/repos/amazon-eks-ami-mirror
+      - run: git push mirror
