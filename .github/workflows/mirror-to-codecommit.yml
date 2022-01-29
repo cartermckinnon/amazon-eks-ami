@@ -24,4 +24,4 @@ jobs:
       - run: git config credential.helper '!aws codecommit credential-helper $@'
       - run: git config credential.UseHttpPath true
       - run: git remote add mirror https://git-codecommit.us-west-2.amazonaws.com/v1/repos/amazon-eks-ami-mirror
-      - run: git push mirror master:mckdev
+      - run: git push mirror master:test
