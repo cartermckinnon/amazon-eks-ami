@@ -1,3 +1,1 @@
-Test file for evaluating GitHub Actions for commit replication to CodeCommit.
-
-I'm a line being added to the file; I should show up in CodeCommit momentarily.
+This file exists to test commit replication to CodeCommit.
