@@ -1,9 +1,6 @@
 name: CI
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - 'master'
   pull_request:
     types:
       - opened
@@ -17,8 +14,30 @@ jobs:
     - run: echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
     - run: go install mvdan.cc/sh/v3/cmd/shfmt@latest
     - run: make lint
-  test:
+  unit-test:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
     - run: make test
+  build:
+    needs: unit-test
+    runs-on: ubuntu-latest
+    # These permissions are needed to interact with GitHub's OIDC Token endpoint.
+    permissions:
+      id-token: write
+      contents: read        
+    strategy:
+      matrix:
+        include:
+          - K8S_VERSION: "1.20"
+          - K8S_VERSION: "1.21"
+          - K8S_VERSION: "1.22"
+          - K8S_VERSION: "1.23"
+    steps:
+      - uses: actions/checkout@v2
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: {{ secrets.AWS_REGION }}
+          role-to-assume: {{ secrets.AWS_ROLE_ARN }}
+      - name: ${{ matrix.K8S_VERSION }}
+        run: make ${{ matrix.K8S_VERSION }} ami_name=amazon-eks-node-{{ matrix.K8S_VERION }}-pr-${{github.event.pull_request.number}}-$(git rev-parse --short "$GITHUB_SHA")
