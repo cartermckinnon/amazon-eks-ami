@@ -1,8 +1,10 @@
 PACKER_BINARY ?= packer
-PACKER_VARIABLES := aws_region ami_name binary_bucket_name binary_bucket_region kubernetes_version kubernetes_build_date kernel_version docker_version containerd_version runc_version cni_plugin_version source_ami_id source_ami_owners source_ami_filter_name arch instance_type security_group_id additional_yum_repos pull_cni_from_github sonobuoy_e2e_registry ami_regions
+PACKER_VARIABLES := aws_region ami_name binary_bucket_name binary_bucket_region kubernetes_version kubernetes_build_date kernel_version docker_version containerd_version runc_version cni_plugin_version source_ami_id source_ami_owners source_ami_filter_name arch instance_type security_group_id additional_yum_repos pull_cni_from_github sonobuoy_e2e_registry ami_regions volume_type
 
 K8S_VERSION_PARTS := $(subst ., ,$(kubernetes_version))
 K8S_VERSION_MINOR := $(word 1,${K8S_VERSION_PARTS}).$(word 2,${K8S_VERSION_PARTS})
+
+MAKEFILE_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
 aws_region ?= $(AWS_DEFAULT_REGION)
 binary_bucket_region ?= $(AWS_DEFAULT_REGION)
@@ -30,6 +32,34 @@ T_RESET := \e[0m
 
 .PHONY: all
 all: 1.20 1.21 1.22 1.23 ## Build all versions of EKS Optimized AL2 AMI
+
+# ensure that these flags are equivalent to the rules in the .editorconfig
+SHFMT_FLAGS := --list \
+--language-dialect auto \
+--indent 2 \
+--binary-next-line \
+--case-indent \
+--space-redirects
+
+SHFMT_COMMAND := $(shell which shfmt)
+ifeq (, $(SHFMT_COMMAND))
+SHFMT_COMMAND = docker run --rm -v $(MAKEFILE_DIR):$(MAKEFILE_DIR) mvdan/shfmt
+endif
+
+.PHONY: fmt
+fmt: ## Format the source files
+	$(SHFMT_COMMAND) $(SHFMT_FLAGS) --write $(MAKEFILE_DIR)
+
+SHELLCHECK_COMMAND := $(shell which shellcheck)
+ifeq (, $(SHELLCHECK_COMMAND))
+SHELLCHECK_COMMAND = docker run --rm -v $(MAKEFILE_DIR):$(MAKEFILE_DIR) koalaman/shellcheck:stable
+endif
+SHELL_FILES := $(shell find $(MAKEFILE_DIR) -type f -name '*.sh')
+
+.PHONY: lint
+lint: ## Check the source files for syntax and format issues
+	$(SHFMT_COMMAND) $(SHFMT_FLAGS) --diff $(MAKEFILE_DIR)
+	$(SHELLCHECK_COMMAND) --format gcc --severity error $(SHELL_FILES)
 
 .PHONY: test
 test: ## run the test-harness
