@@ -32,5 +32,5 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       k8s_version: ${{ matrix.k8s_version }}
-      build_id: $GITHUB_EVENT_NAME-$(git rev-parse --short $GITHUB_SHA)-${{ matrix.k8s_version }}-$GITHUB_RUN_ID-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT
+      build_id: ${{ env.GITHUB_EVENT_NAME }}-${{ env.GITHUB_SHA }}-${{ env.GITHUB_RUN_ID }}-${{ env.GITHUB_RUN_NUMBER }}-${{ env.GITHUB_RUN_ATTEMPT }}
     secrets: inherit

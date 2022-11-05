@@ -26,11 +26,13 @@ jobs:
       - run: |
           wget -O eksctl.tar.gz "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz"
           tar xf eksctl.tar.gz && chmod +x ./eksctl
+          SANITIZED_K8S_VERSION=$(sed 's/.//g' ${{ inputs.k8s_version }})
+          CLUSTER_NAME="$SANITIZED_K8S_VERSION-${{ inputs.build_id }}"
           echo '---
             apiVersion: eksctl.io/v1alpha5
             kind: ClusterConfig
             metadata:
-              name: "${{ inputs.build_id }}"
+              name: "'$CLUSTER_NAME'"
               region: "${{ secrets.AWS_REGION }}"
               version: "${{ inputs.k8s_version }}"
             nodeGroups:
@@ -46,6 +48,9 @@ jobs:
                 /etc/eks/bootstrap.sh ${{ inputs.build_id }} --kubelet-extra-args "--node-labels=${NODE_LABELS}"' >> cluster.yaml
           cat cluster.yaml
           ./eksctl create cluster --config-file cluster.yaml
+          echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
+        outputs:
+          cluster_name: ${{ steps.create-cluster.outputs.cluster_name }}
   sonobuoy:
     needs: launch
     # These permissions are needed to interact with GitHub's OIDC Token endpoint.
@@ -57,7 +62,7 @@ jobs:
         with:
           aws-region: ${{ secrets.AWS_REGION }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-      - run: aws eks update-kubeconfig --name ${{ inputs.build_id }}
+      - run: aws eks update-kubeconfig --name ${{ needs.launch.outputs.cluster_name }}
       - run: |
           wget -O sonobuoy.tar.gz "https://github.com/vmware-tanzu/sonobuoy/releases/download/v0.56.11/sonobuoy_0.56.11_linux_amd64.tar.gz"
           tar xf sonobuoy.tar.gz && chmod +x ./sonobuoy
