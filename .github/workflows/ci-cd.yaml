@@ -38,10 +38,10 @@ jobs:
           - K8S_VERSION: "1.23"
     steps:
       - uses: actions/checkout@v2
-        uses: aws-actions/configure-aws-credentials@v1
+      - uses: aws-actions/configure-aws-credentials@v1
         with:
-          aws-region: {{ secrets.AWS_REGION }}
-          role-to-assume: {{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
       - run: echo "AMI_NAME=amazon-eks-node-${{ matrix.K8S_VERSION }}-$(git rev-parse --short "$GITHUB_SHA")" >> $GITHUB_ENV
       - if: ${{ github.event_name == 'pull_request' }}
         run: echo "AMI_NAME=${{ env.AMI_NAME }}-pr-${{ github.event.pull_request.number }}" >> $GITHUB_ENV
