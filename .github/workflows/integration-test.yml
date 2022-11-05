@@ -1,5 +1,6 @@
 name: Integration test
 on:
+  workflow_dispatch:
   workflow_call:
     inputs:
       build_id:
@@ -29,20 +30,21 @@ jobs:
             apiVersion: eksctl.io/v1alpha5
             kind: ClusterConfig
             metadata:
-              name: ${{ inputs.build_id }}
-              region: ${{ secrets.AWS_REGION }}
-              version: ${{ inputs.k8s_version }}
+              name: "${{ inputs.build_id }}"
+              region: "${{ secrets.AWS_REGION }}"
+              version: "${{ inputs.k8s_version }}"
             nodeGroups:
             - name: nodes
               instanceType: t2.micro
               minSize: 1
               maxSize: 1
               desiredCapacity: 1
-              ami: ${{ inputs.ami_id }}
+              ami: "${{ inputs.ami_id }}"
               overrideBootstrapCommand: |
                 #!/bin/bash
                 source /var/lib/cloud/scripts/eksctl/bootstrap.helper.sh
                 /etc/eks/bootstrap.sh ${{ inputs.build_id }} --kubelet-extra-args "--node-labels=${NODE_LABELS}"' >> cluster.yaml
+          cat cluster.yaml
           ./eksctl create cluster --config-file cluster.yaml
   sonobuoy:
     needs: launch
