@@ -32,23 +32,23 @@ jobs:
           SANITIZED_K8S_VERSION=$(echo ${{ inputs.k8s_version }} | tr -d '.')
           CLUSTER_NAME="$SANITIZED_K8S_VERSION-${{ inputs.build_id }}"
           echo '---
-            apiVersion: eksctl.io/v1alpha5
-            kind: ClusterConfig
-            metadata:
-              name: "'$CLUSTER_NAME'"
-              region: "${{ secrets.AWS_REGION }}"
-              version: "${{ inputs.k8s_version }}"
-            nodeGroups:
-            - name: nodes
-              instanceType: t2.micro
-              minSize: 1
-              maxSize: 1
-              desiredCapacity: 1
-              ami: "${{ inputs.ami_id }}"
-              overrideBootstrapCommand: |
-                #!/bin/bash
-                source /var/lib/cloud/scripts/eksctl/bootstrap.helper.sh
-                /etc/eks/bootstrap.sh ${{ inputs.build_id }} --kubelet-extra-args "--node-labels=${NODE_LABELS}"' >> cluster.yaml
+          apiVersion: eksctl.io/v1alpha5
+          kind: ClusterConfig
+          metadata:
+            name: "'$CLUSTER_NAME'"
+            region: "${{ secrets.AWS_REGION }}"
+            version: "${{ inputs.k8s_version }}"
+          nodeGroups:
+          - name: nodes
+            instanceType: t2.micro
+            minSize: 1
+            maxSize: 1
+            desiredCapacity: 1
+            ami: "${{ inputs.ami_id }}"
+            overrideBootstrapCommand: |
+              #!/bin/bash
+              source /var/lib/cloud/scripts/eksctl/bootstrap.helper.sh
+              /etc/eks/bootstrap.sh ${{ inputs.build_id }} --kubelet-extra-args "--node-labels=${NODE_LABELS}"' >> cluster.yaml
           cat cluster.yaml
           ./eksctl create cluster --config-file cluster.yaml
           echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
