@@ -1,0 +1,12 @@
+name: 'Garbage collection'
+on:
+  schedule:
+    # hourly at the top of the hour
+    - cron: '0 * * * *'
+jobs:
+  cluster-sweeper:
+    uses: ./.github/workflows/cluster-sweeper.yaml
+    with:
+      # 6 hours
+      max_age_seconds: 21600
+          

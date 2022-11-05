@@ -1,0 +1,31 @@
+name: Cluster sweeper
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      max_age_seconds:
+        required: true
+        type: int
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}          
+      - run: |
+          wget --no-verbose -O eksctl.tar.gz "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz"
+          tar xf eksctl.tar.gz && chmod +x ./eksctl      
+          for CLUSTER in $(aws eks list-clusters --query 'clusters[]' --output text); do
+            CREATED_AT=$(aws eks describe-cluster --name $CLUSTER --query 'cluster.createdAt' --output text)
+            CREATED_AT_SECONDS=$(date -d "$CREATED_AT" '+%s')
+            CURRENT_TIME=$(date '+%s')
+            MIN_CREATION_TIME_SECONDS=$(($CURRENT_TIME - ${{ inputs.max_age_seconds }}))
+            if [ "$CREATED_AT_SECONDS" -lt "$MIN_CREATION_TIME_SECONDS" ]; then
+              echo "Deleting cluster $CLUSTER_NAME"
+              ./eksctl delete cluster --name "$CLUSTER_NAME"
+            fi
+          done
