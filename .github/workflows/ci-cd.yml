@@ -22,7 +22,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - run: make test
-  build:
+  version-workflow:
     name: ${{ matrix.k8s_version }}
     needs: unit-test
     strategy:
