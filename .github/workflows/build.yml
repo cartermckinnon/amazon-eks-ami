@@ -35,3 +35,4 @@ jobs:
       k8s_version: ${{ inputs.k8s_version }}    
       build_id: ${{ inputs.build_id }}
       ami_id: ${{ needs.build.outputs.ami_id }}
+    secrets: inherit

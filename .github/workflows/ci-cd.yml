@@ -22,8 +22,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - run: make test
-  build-pr:
-    if: github.event.name == 'pull_request'
+  build:
     needs: unit-test
     strategy:
       matrix:
@@ -31,13 +30,5 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       k8s_version: ${{ matrix.K8S_VERSION }}
-      build_id: ${{ matrix.K8S_VERSION }}-$(git rev-parse --short $GITHUB_SHA)
-  build-head:
-    needs: unit-test
-    strategy:
-      matrix:
-        k8s_version: ['1.20', '1.21', '1.22', '1.23']
-    uses: ./.github/workflows/build.yml
-    with:
-      k8s_version: ${{ matrix.K8S_VERSION }}
-      build_id: ${{ matrix.K8S_VERSION }}-$(git rev-parse --short $GITHUB_SHA)-pr-${{ github.event.pull_request.number }}
+      build_id: $GITHUB_EVENT_NAME-$(git rev-parse --short $GITHUB_SHA)-${{ matrix.K8S_VERSION }}-$GITHUB_RUN_ID-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT
+    secrets: inherit
