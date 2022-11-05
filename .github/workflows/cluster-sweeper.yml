@@ -1,7 +1,6 @@
 name: Cluster sweeper
 on:
   workflow_dispatch:
-  workflow_call:
     inputs:
       max_age_seconds:
         required: true
