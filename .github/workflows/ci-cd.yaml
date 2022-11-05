@@ -47,3 +47,5 @@ jobs:
         run: echo "AMI_NAME=${{ env.AMI_NAME }}-pr-${{ github.event.pull_request.number }}" >> $GITHUB_ENV
         name: ${{ matrix.K8S_VERSION }}
       - run: make ${{ matrix.K8S_VERSION }} ami_name=${{ env.AMI_NAME }}
+      - run: echo "AMI_ID=$(jq -r .builds[0].artifact_id "${{ env.AMI_NAME }}-manifest.json" | cut -d ':' -f 2)" >> $GITHUB_ENV
+
