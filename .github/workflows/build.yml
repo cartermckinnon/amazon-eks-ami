@@ -22,10 +22,9 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}          
       - run: echo "AMI_NAME=amazon-eks-node-${{ inputs.build_id }}" >> $GITHUB_ENV
-      - run: make ${{ matrix.K8S_VERSION }} ami_name=${{ env.AMI_NAME }}
-      - run: echo "AMI_ID=$(jq -r .builds[0].artifact_id "${{ env.AMI_NAME }}-manifest.json" | cut -d ':' -f 2)" >> $GITHUB_ENV
+      - run: make ${{ inputs.k8s_version }} ami_name=${{ env.AMI_NAME }}
       - id: set-outputs
-        run: echo "ami_id=${{ env.AMI_ID }}" >> $GITHUB_OUTPUT
+        run: echo "ami_id=$(jq -r .builds[0].artifact_id "${{ env.AMI_NAME }}-manifest.json" | cut -d ':' -f 2)" >> $GITHUB_OUTPUT
     outputs:
       ami_id: ${{ steps.set-outputs.outputs.ami_id }}
   integration-test:

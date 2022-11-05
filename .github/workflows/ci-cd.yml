@@ -23,12 +23,13 @@ jobs:
     - uses: actions/checkout@v2
     - run: make test
   build:
+    name: ${{ matrix.k8s_version }}
     needs: unit-test
     strategy:
       matrix:
         k8s_version: ['1.20', '1.21', '1.22', '1.23']
     uses: ./.github/workflows/build.yml
     with:
-      k8s_version: ${{ matrix.K8S_VERSION }}
-      build_id: $GITHUB_EVENT_NAME-$(git rev-parse --short $GITHUB_SHA)-${{ matrix.K8S_VERSION }}-$GITHUB_RUN_ID-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT
+      k8s_version: ${{ matrix.k8s_version }}
+      build_id: $GITHUB_EVENT_NAME-$(git rev-parse --short $GITHUB_SHA)-${{ matrix.k8s_version }}-$GITHUB_RUN_ID-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT
     secrets: inherit
