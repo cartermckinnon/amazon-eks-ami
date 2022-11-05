@@ -23,8 +23,8 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
       - run: |
-          curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" | tar xz -C /tmp
-          chmod +x ./eksctl
+          wget -O eksctl.tar.gz "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz"
+          tar xf eksctl.tar.gz && chmod +x ./eksctl
           echo '
             apiVersion: eksctl.io/v1alpha5
             kind: ClusterConfig
@@ -56,4 +56,7 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
       - run: aws eks update-kubeconfig --name ${{ inputs.build_id }}
-      - run: sonobuoy run --wait
+      - run: |
+          wget -O sonobuoy.tar.gz "https://github.com/vmware-tanzu/sonobuoy/releases/download/v0.56.11/sonobuoy_0.56.11_linux_amd64.tar.gz"
+          tar xf sonobuoy.tar.gz && chmod +x ./sonobuoy
+          sonobuoy run --wait
