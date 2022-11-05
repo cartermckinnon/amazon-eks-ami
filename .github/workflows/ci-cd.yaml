@@ -1,6 +1,9 @@
-name: CI
+name: CI/CD
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - 'master'
   pull_request:
     types:
       - opened
@@ -39,5 +42,8 @@ jobs:
         with:
           aws-region: {{ secrets.AWS_REGION }}
           role-to-assume: {{ secrets.AWS_ROLE_ARN }}
-      - name: ${{ matrix.K8S_VERSION }}
-        run: make ${{ matrix.K8S_VERSION }} ami_name=amazon-eks-node-{{ matrix.K8S_VERION }}-pr-${{github.event.pull_request.number}}-$(git rev-parse --short "$GITHUB_SHA")
+      - run: echo "AMI_NAME=amazon-eks-node-${{ matrix.K8S_VERSION }}-$(git rev-parse --short "$GITHUB_SHA")" >> $GITHUB_ENV
+      - if: ${{ github.event_name == 'pull_request' }}
+        run: echo "AMI_NAME=${{ env.AMI_NAME }}-pr-${{ github.event.pull_request.number }}" >> $GITHUB_ENV
+        name: ${{ matrix.K8S_VERSION }}
+      - run: make ${{ matrix.K8S_VERSION }} ami_name=${{ env.AMI_NAME }}
