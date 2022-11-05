@@ -11,7 +11,7 @@ on:
         required: true
         type: number
 jobs:
-  build:
+  cluster-sweeper:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -29,7 +29,7 @@ jobs:
             CURRENT_TIME=$(date '+%s')
             MIN_CREATION_TIME_SECONDS=$(($CURRENT_TIME - ${{ inputs.max_age_seconds }}))
             if [ "$CREATED_AT_SECONDS" -lt "$MIN_CREATION_TIME_SECONDS" ]; then
-              echo "Deleting cluster $CLUSTER_NAME"
-              ./eksctl delete cluster --name "$CLUSTER_NAME"
+              echo "Deleting cluster $CLUSTER"
+              ./eksctl delete cluster --name "$CLUSTER"
             fi
           done
