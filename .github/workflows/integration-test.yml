@@ -48,7 +48,7 @@ jobs:
             overrideBootstrapCommand: |
               #!/bin/bash
               source /var/lib/cloud/scripts/eksctl/bootstrap.helper.sh
-              /etc/eks/bootstrap.sh ${{ inputs.build_id }} --kubelet-extra-args "--node-labels=${NODE_LABELS}"' >> cluster.yaml
+              /etc/eks/bootstrap.sh "'$CLUSTER_NAME'" --kubelet-extra-args "--node-labels=${NODE_LABELS}"' >> cluster.yaml
           cat cluster.yaml
           ./eksctl create cluster --config-file cluster.yaml
           echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
