@@ -22,30 +22,22 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - run: make test
-  build:
+  build-pr:
+    if: github.event.name == 'pull_request'
     needs: unit-test
-    runs-on: ubuntu-latest
-    # These permissions are needed to interact with GitHub's OIDC Token endpoint.
-    permissions:
-      id-token: write
-      contents: read        
     strategy:
       matrix:
-        include:
-          - K8S_VERSION: "1.20"
-          - K8S_VERSION: "1.21"
-          - K8S_VERSION: "1.22"
-          - K8S_VERSION: "1.23"
-    steps:
-      - uses: actions/checkout@v2
-      - uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-region: ${{ secrets.AWS_REGION }}
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-      - run: echo "BUILD_ID=${{ matrix.K8S_VERSION }}-$(git rev-parse --short "$GITHUB_SHA")" >> $GITHUB_ENV
-      - if: ${{ github.event_name == 'pull_request' }}
-        run: echo "BUILD_ID=${{ env.BUILD_ID }}-pr-${{ github.event.pull_request.number }}" >> $GITHUB_ENV
-      - uses: ./.github/workflows/build.yml
-        with:
-          k8s_version: ${{ matrix.K8S_VERSION }}
-          build_id: ${{ env.BUILD_ID }}
+        k8s_version: ['1.20', '1.21', '1.22', '1.23']
+    uses: ./.github/workflows/build.yml
+    with:
+      k8s_version: ${{ matrix.K8S_VERSION }}
+      build_id: ${{ matrix.K8S_VERSION }}-$(git rev-parse --short $GITHUB_SHA)
+  build-head:
+    needs: unit-test
+    strategy:
+      matrix:
+        k8s_version: ['1.20', '1.21', '1.22', '1.23']
+    uses: ./.github/workflows/build.yml
+    with:
+      k8s_version: ${{ matrix.K8S_VERSION }}
+      build_id: ${{ matrix.K8S_VERSION }}-$(git rev-parse --short $GITHUB_SHA)-pr-${{ github.event.pull_request.number }}

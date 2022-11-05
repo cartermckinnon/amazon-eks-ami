@@ -15,7 +15,7 @@ jobs:
   launch:
     # These permissions are needed to interact with GitHub's OIDC Token endpoint.
     permissions:
-      id-token: write  
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - uses: aws-actions/configure-aws-credentials@v1
