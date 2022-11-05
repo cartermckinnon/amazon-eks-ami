@@ -1,0 +1,32 @@
+name: Build
+on:
+  workflow_call:
+    inputs:
+      build_id:
+        required: true
+        type: string
+      k8s_version:
+        required: true
+        type: string        
+jobs:
+  build:
+    needs: unit-test
+    runs-on: ubuntu-latest
+    # These permissions are needed to interact with GitHub's OIDC Token endpoint.
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v2
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+      - run: echo "AMI_NAME=amazon-eks-node-${{ inputs.build_id }}" >> $GITHUB_ENV
+      - run: make ${{ matrix.K8S_VERSION }} ami_name=${{ env.AMI_NAME }}
+      - run: echo "AMI_ID=$(jq -r .builds[0].artifact_id "${{ env.AMI_NAME }}-manifest.json" | cut -d ':' -f 2)" >> $GITHUB_ENV
+      - uses: ./.github/workflows/integration-test.yml
+        with:
+          build_id: ${{ inputs.build_id }}
+          k8s_version: ${{ inputs.k8s_version }}
+          ami_id: ${{ env.AMI_ID }}

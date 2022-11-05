@@ -1,0 +1,56 @@
+name: Integration test
+on:
+  workflow_call:
+    inputs:
+      build_id:
+        required: true
+        type: string
+      ami_id:
+        required: true
+        type: string
+      k8s_version:
+        required: true
+        type: string        
+jobs:
+  launch:
+    # These permissions are needed to interact with GitHub's OIDC Token endpoint.
+    permissions:
+      id-token: write  
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}    
+      - run: |
+          echo '
+            apiVersion: eksctl.io/v1alpha5
+            kind: ClusterConfig
+            metadata:
+              name: ${{ inputs.build_id }}
+              region: ${{ secrets.AWS_REGION }}
+              version: ${{ inputs.k8s_version }}
+            nodeGroups:
+            - name: nodes
+              instanceType: t2.micro
+              minSize: 1
+              maxSize: 1
+              desiredCapacity: 1
+              ami: ${{ inputs.ami_id }}
+              overrideBootstrapCommand: |
+              #!/bin/bash
+              source /var/lib/cloud/scripts/eksctl/bootstrap.helper.sh
+              /etc/eks/bootstrap.sh ${{ inputs.build_id }} --kubelet-extra-args "--node-labels=${NODE_LABELS}"' >> cluster.yaml
+          eksctl create cluster --config-file cluster.yaml
+  sonobuoy:
+    # These permissions are needed to interact with GitHub's OIDC Token endpoint.
+    permissions:
+      id-token: write  
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+      - run: aws eks update-kubeconfig --name ${{ inputs.build_id }}
+      - run: sonobuoy run --wait
