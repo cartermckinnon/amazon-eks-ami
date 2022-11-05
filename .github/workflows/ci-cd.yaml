@@ -42,10 +42,29 @@ jobs:
         with:
           aws-region: ${{ secrets.AWS_REGION }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-      - run: echo "AMI_NAME=amazon-eks-node-${{ matrix.K8S_VERSION }}-$(git rev-parse --short "$GITHUB_SHA")" >> $GITHUB_ENV
+      - run: echo "BUILD_ID=${{ matrix.K8S_VERSION }}-$(git rev-parse --short "$GITHUB_SHA")" >> $GITHUB_ENV
       - if: ${{ github.event_name == 'pull_request' }}
-        run: echo "AMI_NAME=${{ env.AMI_NAME }}-pr-${{ github.event.pull_request.number }}" >> $GITHUB_ENV
-        name: ${{ matrix.K8S_VERSION }}
+        run: echo "BUILD_ID=${{ env.BUILD_ID }}-pr-${{ github.event.pull_request.number }}" >> $GITHUB_ENV
+      - run: echo "AMI_NAME=amazon-eks-node-${{ env.BUILD_ID }}" >> $GITHUB_ENV
       - run: make ${{ matrix.K8S_VERSION }} ami_name=${{ env.AMI_NAME }}
       - run: echo "AMI_ID=$(jq -r .builds[0].artifact_id "${{ env.AMI_NAME }}-manifest.json" | cut -d ':' -f 2)" >> $GITHUB_ENV
-
+      - run: |
+          echo '
+            apiVersion: eksctl.io/v1alpha5
+            kind: ClusterConfig
+            metadata:
+              name: ${{ env.BUILD_ID }}
+              region: ${{ secrets.AWS_REGION }}
+              version: ${{ matrix.K8S_VERSION }}
+            nodeGroups:
+            - name: nodes
+              instanceType: t2.micro
+              minSize: 1
+              maxSize: 1
+              desiredCapacity: 1
+              ami: ${{ env.AMI_ID }}
+              overrideBootstrapCommand: |
+              #!/bin/bash
+              source /var/lib/cloud/scripts/eksctl/bootstrap.helper.sh
+              /etc/eks/bootstrap.sh ${{ env.BUILD_ID }} --kubelet-extra-args "--node-labels=${NODE_LABELS}"' >> cluster.yaml
+          eksctl create cluster --config-file cluster.yaml
