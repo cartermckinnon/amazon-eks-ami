@@ -1,4 +1,4 @@
-name: Cluster sweeper
+name: '[Janitor] Cluster sweeper'
 on:
   workflow_dispatch:
     inputs:

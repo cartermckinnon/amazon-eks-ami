@@ -1,4 +1,4 @@
-name: Mirror commits to our internal repository on CodeCommit.
+name: '[Sync] Push to CodeCommit'
 
 on:
   push:

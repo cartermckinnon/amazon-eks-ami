@@ -1,4 +1,4 @@
-name: 'Infrastructure upkeep'
+name: '[Janitor] Entrypoint'
 on:
   schedule:
     # hourly at the top of the hour

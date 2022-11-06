@@ -1,4 +1,4 @@
-name: 'Close stale issues'
+name: '[Admin] Close stale issues'
 on:
   schedule:
     # once a day at noon
