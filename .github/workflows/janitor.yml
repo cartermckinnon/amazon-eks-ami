@@ -10,3 +10,9 @@ jobs:
     with:
       # 6 hours
       max_age_seconds: 21600
+  ami-sweeper:
+    uses: ./.github/workflows/janitor-ami-sweeper.yml
+    secrets: inherit
+    with:
+      # 30 days
+      max_age_seconds: 2592000
