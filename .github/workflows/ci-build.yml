@@ -30,7 +30,7 @@ jobs:
       ami_id: ${{ steps.ami_id.outputs.ami_id }}
   integration-test:
     needs: build
-    uses: ./.github/workflows/integration-test.yml
+    uses: ./.github/workflows/ci-integration-test.yml
     with:
       k8s_version: ${{ inputs.k8s_version }}    
       build_id: ${{ inputs.build_id }}

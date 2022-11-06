@@ -5,7 +5,7 @@ on:
     - cron: '0 * * * *'
 jobs:
   cluster-sweeper:
-    uses: ./.github/workflows/cluster-sweeper.yml
+    uses: ./.github/workflows/janitor-cluster-sweeper.yml
     secrets: inherit
     with:
       # 6 hours
