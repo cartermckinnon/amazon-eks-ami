@@ -50,7 +50,15 @@ jobs:
               source /var/lib/cloud/scripts/eksctl/bootstrap.helper.sh
               /etc/eks/bootstrap.sh "'$CLUSTER_NAME'" --kubelet-extra-args "--node-labels=${NODE_LABELS}"' >> cluster.yaml
           cat cluster.yaml
-          ./eksctl create cluster --config-file cluster.yaml
+          EXISTING_NODEGROUPS=$(./eksctl get nodegroups --cluster "$CLUSTER_NAME" --output json | jq -r '.[].Name')
+          if [ "$?" -eq 0 ]; then
+            for NODEGROUP in $EXISTING_NODEGROUPS; do
+              ./eksctl delete nodegroup --cluster "$CLUSTER_NAME" "$NODEGROUP"
+            done
+            ./eksctl create nodegroup --config-file cluster.yaml
+          else
+            ./eksctl create cluster --config-file cluster.yaml
+          fi          
           echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
   sonobuoy:
     needs: launch
