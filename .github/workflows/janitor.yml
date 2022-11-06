@@ -1,11 +1,11 @@
-name: 'Garbage collection'
+name: 'Infrastructure upkeep'
 on:
   schedule:
     # hourly at the top of the hour
     - cron: '0 * * * *'
 jobs:
   cluster-sweeper:
-    uses: ./.github/workflows/cluster-sweeper.yaml
+    uses: ./.github/workflows/cluster-sweeper.yml
     with:
       # 6 hours
       max_age_seconds: 21600
