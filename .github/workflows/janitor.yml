@@ -6,7 +6,7 @@ on:
 jobs:
   cluster-sweeper:
     uses: ./.github/workflows/cluster-sweeper.yml
+    secrets: inherit
     with:
       # 6 hours
       max_age_seconds: 21600
-          
