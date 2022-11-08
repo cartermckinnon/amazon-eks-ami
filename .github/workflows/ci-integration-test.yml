@@ -19,13 +19,13 @@ jobs:
       id-token: write
     runs-on: ubuntu-latest
     outputs:
-      cluster_name: ${{ steps.create_cluster.outputs.cluster_name }}    
+      cluster_name: ${{ steps.launch.outputs.cluster_name }}    
     steps:
       - uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-region: ${{ secrets.AWS_REGION }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-      - name: create_cluster
+      - id: launch
         run: |
           #!/usr/bin/env bash
 
@@ -75,8 +75,8 @@ jobs:
         with:
           aws-region: ${{ secrets.AWS_REGION }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-      - run: aws eks update-kubeconfig --name ${{ needs.launch.outputs.cluster_name }}
       - run: |
+          aws eks update-kubeconfig --name ${{ needs.launch.outputs.cluster_name }}
           wget --no-verbose -O sonobuoy.tar.gz "https://github.com/vmware-tanzu/sonobuoy/releases/download/v0.56.11/sonobuoy_0.56.11_linux_amd64.tar.gz"
           tar xf sonobuoy.tar.gz && chmod +x ./sonobuoy
           ./sonobuoy run --wait
