@@ -29,7 +29,6 @@ jobs:
 
           function iso8601_is_eligible_for_deletion() {
             local TIME_IN_ISO8601="$1"
-            local MAX_AGE_IN_SECONDS="$2"
             local TIME_IN_SECONDS=$(date -d "$TIME_IN_ISO8601" '+%s')
             local CURRENT_TIME_IN_SECONDS=$(date '+%s')
             MIN_TIME_SECONDS=$(($CURRENT_TIME_IN_SECONDS - ${{ inputs.max_age_seconds }}))
