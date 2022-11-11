@@ -11,7 +11,7 @@ on:
         type: string
       k8s_version:
         required: true
-        type: string        
+        type: string
 jobs:
   launch:
     # These permissions are needed to interact with GitHub's OIDC Token endpoint.
@@ -19,7 +19,7 @@ jobs:
       id-token: write
     runs-on: ubuntu-latest
     outputs:
-      cluster_name: ${{ steps.launch.outputs.cluster_name }}    
+      cluster_name: ${{ steps.launch.outputs.cluster_name }}
     steps:
       - uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -44,7 +44,7 @@ jobs:
             version: "${{ inputs.k8s_version }}"
           nodeGroups:
           - name: "${{ inputs.build_id }}"
-            instanceType: t2.micro
+            instanceType: m5.large
             minSize: 1
             maxSize: 1
             desiredCapacity: 1
@@ -62,13 +62,13 @@ jobs:
             ./eksctl create nodegroup --config-file cluster.yaml
           else
             ./eksctl create cluster --config-file cluster.yaml
-          fi          
+          fi
           echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
   sonobuoy:
     needs: launch
     # These permissions are needed to interact with GitHub's OIDC Token endpoint.
     permissions:
-      id-token: write  
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - uses: aws-actions/configure-aws-credentials@v1
