@@ -138,20 +138,18 @@ set -u
 KUBELET_VERSION=$(kubelet --version | grep -Eo '[0-9]\.[0-9]+\.[0-9]+')
 echo "Using kubelet version $KUBELET_VERSION"
 
-function is_greater_than_or_equal_to_version() {
-  local actual_version="$1"
-  local compared_version="$2"
-
-  [ $actual_version = "$(echo -e "$actual_version\n$compared_version" | sort -V | tail -n1)" ]
-}
-
 # As of Kubernetes version 1.24, we will start defaulting the container runtime to containerd
 # and no longer support docker as a container runtime.
 IS_124_OR_GREATER=false
 DEFAULT_CONTAINER_RUNTIME=dockerd
-if is_greater_than_or_equal_to_version $KUBELET_VERSION "1.24.0"; then
+if vercmp "$KUBELET_VERSION" gteq "1.24.0"; then
   IS_124_OR_GREATER=true
   DEFAULT_CONTAINER_RUNTIME=containerd
+elif vercmp "$KUBELET_VERSION" gteq "1.22.0"; then
+  # These APIs are only available in alpha pre-1.24.
+  # This can be removed when version 1.23 is no longer supported.
+  sed -i s,kubelet.config.k8s.io/v1beta1,kubelet.config.k8s.io/v1alpha1,g /etc/eks/ecr-credential-provider/ecr-credential-provider-config
+  sed -i s,credentialprovider.kubelet.k8s.io/v1beta1,credentialprovider.kubelet.k8s.io/v1alpha1,g /etc/eks/ecr-credential-provider/ecr-credential-provider-config
 fi
 
 # Set container runtime related variables
@@ -179,51 +177,6 @@ IP_FAMILY="${IP_FAMILY:-}"
 SERVICE_IPV6_CIDR="${SERVICE_IPV6_CIDR:-}"
 ENABLE_LOCAL_OUTPOST="${ENABLE_LOCAL_OUTPOST:-}"
 CLUSTER_ID="${CLUSTER_ID:-}"
-
-function get_pause_container_account_for_region() {
-  local region="$1"
-  case "${region}" in
-    ap-east-1)
-      echo "${PAUSE_CONTAINER_ACCOUNT:-800184023465}"
-      ;;
-    me-south-1)
-      echo "${PAUSE_CONTAINER_ACCOUNT:-558608220178}"
-      ;;
-    cn-north-1)
-      echo "${PAUSE_CONTAINER_ACCOUNT:-918309763551}"
-      ;;
-    cn-northwest-1)
-      echo "${PAUSE_CONTAINER_ACCOUNT:-961992271922}"
-      ;;
-    us-gov-west-1)
-      echo "${PAUSE_CONTAINER_ACCOUNT:-013241004608}"
-      ;;
-    us-gov-east-1)
-      echo "${PAUSE_CONTAINER_ACCOUNT:-151742754352}"
-      ;;
-    us-iso-east-1)
-      echo "${PAUSE_CONTAINER_ACCOUNT:-725322719131}"
-      ;;
-    us-isob-east-1)
-      echo "${PAUSE_CONTAINER_ACCOUNT:-187977181151}"
-      ;;
-    af-south-1)
-      echo "${PAUSE_CONTAINER_ACCOUNT:-877085696533}"
-      ;;
-    eu-south-1)
-      echo "${PAUSE_CONTAINER_ACCOUNT:-590381155156}"
-      ;;
-    ap-southeast-3)
-      echo "${PAUSE_CONTAINER_ACCOUNT:-296578399912}"
-      ;;
-    me-central-1)
-      echo "${PAUSE_CONTAINER_ACCOUNT:-759879836304}"
-      ;;
-    *)
-      echo "${PAUSE_CONTAINER_ACCOUNT:-602401143452}"
-      ;;
-  esac
-}
 
 # Helper function which calculates the amount of the given resource (either CPU or memory)
 # to reserve in a given resource range, specified by a start and end of the range and a percentage
@@ -316,8 +269,8 @@ if [[ "$MACHINE" != "x86_64" && "$MACHINE" != "aarch64" ]]; then
   exit 1
 fi
 
-PAUSE_CONTAINER_ACCOUNT=$(get_pause_container_account_for_region "${AWS_DEFAULT_REGION}")
-PAUSE_CONTAINER_IMAGE=${PAUSE_CONTAINER_IMAGE:-$PAUSE_CONTAINER_ACCOUNT.dkr.ecr.$AWS_DEFAULT_REGION.$AWS_SERVICES_DOMAIN/eks/pause}
+ECR_URI=$(/etc/eks/get-ecr-uri.sh "${AWS_DEFAULT_REGION}" "${AWS_SERVICES_DOMAIN}" "${PAUSE_CONTAINER_ACCOUNT:-}")
+PAUSE_CONTAINER_IMAGE=${PAUSE_CONTAINER_IMAGE:-$ECR_URI/eks/pause}
 PAUSE_CONTAINER="$PAUSE_CONTAINER_IMAGE:$PAUSE_CONTAINER_VERSION"
 
 ### kubelet kubeconfig
@@ -467,7 +420,7 @@ else
 fi
 INSTANCE_TYPE=$(imds 'latest/meta-data/instance-type')
 
-if is_greater_than_or_equal_to_version $KUBELET_VERSION "1.22.0"; then
+if vercmp "$KUBELET_VERSION" gteq "1.22.0"; then
   # for K8s versions that suport API Priority & Fairness, increase our API server QPS
   echo $(jq ".kubeAPIQPS=( .kubeAPIQPS // 10)|.kubeAPIBurst=( .kubeAPIBurst // 20)" $KUBELET_CONFIG) > $KUBELET_CONFIG
 fi
@@ -527,27 +480,26 @@ if [[ "$CONTAINER_RUNTIME" = "containerd" ]]; then
 
   sudo mkdir -p /etc/containerd
   sudo mkdir -p /etc/cni/net.d
-  mkdir -p /etc/systemd/system/containerd.service.d
-  cat << EOF > /etc/systemd/system/containerd.service.d/10-compat-symlink.conf
-[Service]
-ExecStartPre=/bin/ln -sf /run/containerd/containerd.sock /run/dockershim.sock
-EOF
   if [[ -n "$CONTAINERD_CONFIG_FILE" ]]; then
     sudo cp -v $CONTAINERD_CONFIG_FILE /etc/eks/containerd/containerd-config.toml
   fi
   echo "$(jq '.cgroupDriver="systemd"' $KUBELET_CONFIG)" > $KUBELET_CONFIG
   sudo sed -i s,SANDBOX_IMAGE,$PAUSE_CONTAINER,g /etc/eks/containerd/containerd-config.toml
-  sudo cp -v /etc/eks/containerd/containerd-config.toml /etc/containerd/config.toml
-  sudo cp -v /etc/eks/containerd/sandbox-image.service /etc/systemd/system/sandbox-image.service
+
+  # Check if the containerd config file is the same as the one used in the image build.
+  # If different, then restart containerd w/ proper config
+  if ! cmp -s /etc/eks/containerd/containerd-config.toml /etc/containerd/config.toml; then
+    sudo cp -v /etc/eks/containerd/containerd-config.toml /etc/containerd/config.toml
+    sudo cp -v /etc/eks/containerd/sandbox-image.service /etc/systemd/system/sandbox-image.service
+    sudo chown root:root /etc/systemd/system/sandbox-image.service
+    systemctl daemon-reload
+    systemctl enable containerd sandbox-image
+    systemctl restart sandbox-image containerd
+  fi
   sudo cp -v /etc/eks/containerd/kubelet-containerd.service /etc/systemd/system/kubelet.service
   sudo chown root:root /etc/systemd/system/kubelet.service
-  sudo chown root:root /etc/systemd/system/sandbox-image.service
-  systemctl daemon-reload
-  systemctl enable containerd
-  systemctl restart containerd
-  systemctl enable sandbox-image
-  systemctl start sandbox-image
-
+  # Validate containerd config
+  sudo containerd config dump > /dev/null
 elif [[ "$CONTAINER_RUNTIME" = "dockerd" ]]; then
   mkdir -p /etc/docker
   bash -c "/sbin/iptables-save > /etc/sysconfig/iptables"

@@ -1,5 +1,5 @@
 PACKER_BINARY ?= packer
-PACKER_VARIABLES := aws_region ami_name binary_bucket_name binary_bucket_region kubernetes_version kubernetes_build_date kernel_version docker_version containerd_version runc_version cni_plugin_version source_ami_id source_ami_owners source_ami_filter_name arch instance_type security_group_id additional_yum_repos pull_cni_from_github sonobuoy_e2e_registry ami_regions volume_type
+AVAILABLE_PACKER_VARIABLES := $(shell $(PACKER_BINARY) inspect -machine-readable eks-worker-al2.json | grep 'template-variable' | awk -F ',' '{print $$4}')
 
 K8S_VERSION_PARTS := $(subst ., ,$(kubernetes_version))
 K8S_VERSION_MINOR := $(word 1,${K8S_VERSION_PARTS}).$(word 2,${K8S_VERSION_PARTS})
@@ -31,7 +31,7 @@ T_YELLOW := \e[0;33m
 T_RESET := \e[0m
 
 .PHONY: all
-all: 1.20 1.21 1.22 1.23 ## Build all versions of EKS Optimized AL2 AMI
+all: 1.20 1.21 1.22 1.23 1.24 ## Build all versions of EKS Optimized AL2 AMI
 
 # ensure that these flags are equivalent to the rules in the .editorconfig
 SHFMT_FLAGS := --list \
@@ -65,32 +65,42 @@ lint: ## Check the source files for syntax and format issues
 test: ## run the test-harness
 	test/test-harness.sh
 
+# include only variables which have a defined value
+PACKER_VARIABLES := $(foreach packerVar,$(AVAILABLE_PACKER_VARIABLES),$(if $($(packerVar)),$(packerVar)))
+PACKER_VAR_FLAGS := -var-file eks-worker-al2-variables.json \
+$(if $(PACKER_VARIABLE_FILE),--var-file=$(PACKER_VARIABLE_FILE),) \
+$(foreach packerVar,$(PACKER_VARIABLES),-var $(packerVar)='$($(packerVar))')
+
 .PHONY: validate
 validate: ## Validate packer config
-	$(PACKER_BINARY) validate $(foreach packerVar,$(PACKER_VARIABLES), $(if $($(packerVar)),--var $(packerVar)='$($(packerVar))',)) eks-worker-al2.json
+	$(PACKER_BINARY) validate $(PACKER_VAR_FLAGS) eks-worker-al2.json
 
 .PHONY: k8s
 k8s: validate ## Build default K8s version of EKS Optimized AL2 AMI
 	@echo "$(T_GREEN)Building AMI for version $(T_YELLOW)$(kubernetes_version)$(T_GREEN) on $(T_YELLOW)$(arch)$(T_RESET)"
-	$(PACKER_BINARY) build -timestamp-ui -color=false $(foreach packerVar,$(PACKER_VARIABLES), $(if $($(packerVar)),--var $(packerVar)='$($(packerVar))',)) eks-worker-al2.json
+	$(PACKER_BINARY) build -timestamp-ui -color=false $(PACKER_VAR_FLAGS) eks-worker-al2.json
 
 # Build dates and versions taken from https://docs.aws.amazon.com/eks/latest/userguide/install-kubectl.html
 
 .PHONY: 1.20
 1.20: ## Build EKS Optimized AL2 AMI - K8s 1.20
-	$(MAKE) k8s kubernetes_version=1.20.15 kubernetes_build_date=2022-07-27 pull_cni_from_github=true
+	$(MAKE) k8s kubernetes_version=1.20.15 kubernetes_build_date=2022-10-31 pull_cni_from_github=true
 
 .PHONY: 1.21
 1.21: ## Build EKS Optimized AL2 AMI - K8s 1.21
-	$(MAKE) k8s kubernetes_version=1.21.14 kubernetes_build_date=2022-07-27 pull_cni_from_github=true
+	$(MAKE) k8s kubernetes_version=1.21.14 kubernetes_build_date=2022-10-31 pull_cni_from_github=true
 
 .PHONY: 1.22
 1.22: ## Build EKS Optimized AL2 AMI - K8s 1.22
-	$(MAKE) k8s kubernetes_version=1.22.12 kubernetes_build_date=2022-07-27 pull_cni_from_github=true
+	$(MAKE) k8s kubernetes_version=1.22.15 kubernetes_build_date=2022-10-31 pull_cni_from_github=true
 
 .PHONY: 1.23
 1.23: ## Build EKS Optimized AL2 AMI - K8s 1.23
-	$(MAKE) k8s kubernetes_version=1.23.9 kubernetes_build_date=2022-07-27 pull_cni_from_github=true
+	$(MAKE) k8s kubernetes_version=1.23.13 kubernetes_build_date=2022-10-31 pull_cni_from_github=true
+
+.PHONY: 1.24
+1.24: ## Build EKS Optimized AL2 AMI - K8s 1.24
+	$(MAKE) k8s kubernetes_version=1.24.7 kubernetes_build_date=2022-10-31 pull_cni_from_github=true
 
 .PHONY: help
 help: ## Display help
