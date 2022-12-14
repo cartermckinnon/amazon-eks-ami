@@ -33,7 +33,7 @@ jobs:
           tar xf eksctl.tar.gz && chmod +x ./eksctl
 
           SANITIZED_K8S_VERSION=$(echo ${{ inputs.k8s_version }} | tr -d '.')
-          CLUSTER_NAME="$SANITIZED_K8S_VERSION"
+          CLUSTER_NAME="$SANITIZED_K8S_VERSION-${{ inputs.build_id }}"
 
           echo '---
           apiVersion: eksctl.io/v1alpha5
@@ -55,14 +55,7 @@ jobs:
               /etc/eks/bootstrap.sh "'$CLUSTER_NAME'" --kubelet-extra-args "--node-labels=${NODE_LABELS}"' >> cluster.yaml
           cat cluster.yaml
 
-          if aws eks describe-cluster --name "$CLUSTER_NAME"; then
-            for NODEGROUP in $(./eksctl get nodegroups --cluster "$CLUSTER_NAME" --output json | jq -r '.[].Name'); do
-              ./eksctl delete nodegroup --cluster "$CLUSTER_NAME" "$NODEGROUP"
-            done
-            ./eksctl create nodegroup --config-file cluster.yaml
-          else
-            ./eksctl create cluster --config-file cluster.yaml
-          fi
+          ./eksctl create cluster --config-file cluster.yaml
           echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
   sonobuoy:
     needs: launch
