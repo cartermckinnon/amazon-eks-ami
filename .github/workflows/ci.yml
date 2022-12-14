@@ -10,6 +10,13 @@ on:
       - reopened
       - synchronize
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      sha_short: ${{ steps.variables.outputs.sha_short }}    
+    steps:
+    - id: variables
+      run: echo "sha_short=$(echo ${{ github.sha }} | rev | cut -c-7 | rev)" >> $GITHUB_OUTPUT    
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -22,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - run: make test
+    - run: make test  
   version-workflow:
     name: ${{ matrix.k8s_version }}
     needs: unit-test
@@ -32,5 +39,5 @@ jobs:
     uses: ./.github/workflows/ci-build.yml
     with:
       k8s_version: ${{ matrix.k8s_version }}
-      build_id: ${{ github.event_name }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}
+      build_id: ${{ github.event_name }}-${{ needs.setup.outputs.sha_short }}-${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}
     secrets: inherit
