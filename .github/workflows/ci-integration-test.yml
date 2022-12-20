@@ -45,9 +45,9 @@ jobs:
           nodeGroups:
           - name: "${{ inputs.build_id }}"
             instanceType: m5.large
-            minSize: 1
-            maxSize: 1
-            desiredCapacity: 1
+            minSize: 3
+            maxSize: 3
+            desiredCapacity: 3
             ami: "${{ inputs.ami_id }}"
             overrideBootstrapCommand: |
               #!/bin/bash
