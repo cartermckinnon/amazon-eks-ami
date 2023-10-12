@@ -2,6 +2,9 @@
 
 <!--new-changelog-entry-placeholder-->
 
+### undefined
+undefined
+
 ### AMI Release v20231002
 * amazon-eks-gpu-node-1.28-v20231002
 * amazon-eks-gpu-node-1.27-v20231002
