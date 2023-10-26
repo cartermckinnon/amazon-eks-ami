@@ -2,6 +2,13 @@
 
 <!--new-changelog-entry-placeholder-->
 
+###  Test release 123
+This content should be inserted at the top of the CHANGELOG.
+
+<details>
+I should be hidden in a collapsible section 🤐 
+</details>
+
 ### AMI Release v20231002
 * amazon-eks-gpu-node-1.28-v20231002
 * amazon-eks-gpu-node-1.27-v20231002
