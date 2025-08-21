@@ -1,0 +1,286 @@
+name: Issue Reproduction
+run-name: 🔬 Reproducing issue #${{ inputs.issue_number }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      uuid:
+        description: 'Unique identifier for this reproduction run'
+        required: true
+        type: string
+      issue_number:
+        description: 'GitHub issue number'
+        required: true
+        type: string
+      requester:
+        description: 'GitHub username who requested the reproduction'
+        required: true
+        type: string
+      comment_url:
+        description: 'URL of the comment that triggered this reproduction'
+        required: true
+        type: string
+      nodeconfig_options:
+        description: 'JSON string of NodeConfig options'
+        required: false
+        type: string
+        default: '{}'
+      repro_args:
+        description: 'Additional reproduction arguments'
+        required: false
+        type: string
+        default: '[]'
+      ami_release_tag:
+        description: 'AMI release tag (e.g., v20250704)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      nodeconfig: ${{ steps.parse.outputs.nodeconfig }}
+      args: ${{ steps.parse.outputs.args }}
+      ami_id: ${{ steps.resolve-ami.outputs.ami_id }}
+      k8s_version: ${{ steps.parse.outputs.k8s_version }}
+      os_distro: ${{ steps.parse.outputs.os_distro }}
+      workflow_run_url: ${{ steps.variables.outputs.workflow_run_url }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # 4.1.7
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # 4.3.1
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_CI }}
+          
+      - name: Parse inputs and set variables
+        id: parse
+        run: |
+          echo "nodeconfig=${{ inputs.nodeconfig_options }}" >> $GITHUB_OUTPUT
+          echo "args=${{ inputs.repro_args }}" >> $GITHUB_OUTPUT
+          
+          # Default to latest supported Kubernetes version if not specified
+          echo "k8s_version=1.31" >> $GITHUB_OUTPUT
+          
+          # Default to AL2023 for reproductions (most common for recent issues)
+          echo "os_distro=al2023" >> $GITHUB_OUTPUT
+          
+      - id: variables
+        run: |
+          echo "workflow_run_url=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_OUTPUT
+          
+      - name: Resolve AMI ID from release tag or SSM
+        id: resolve-ami
+        run: |
+          if [ -n "${{ inputs.ami_release_tag }}" ]; then
+            echo "Resolving AMI ID for release tag: ${{ inputs.ami_release_tag }}"
+            
+            # Use ec2:DescribeImages to find the AMI ID for the specified release tag
+            # AMI naming pattern: amazon-eks-node-{os_distro}-{k8s_version}-{release_tag}
+            AMI_NAME_PATTERN="amazon-eks-node-${{ steps.parse.outputs.os_distro }}-${{ steps.parse.outputs.k8s_version }}-${{ inputs.ami_release_tag }}"
+            
+            echo "Searching for AMI with name pattern: ${AMI_NAME_PATTERN}"
+            
+            AMI_ID=$(aws ec2 describe-images \
+              --region ${{ secrets.AWS_REGION }} \
+              --owners self \
+              --filters "Name=name,Values=${AMI_NAME_PATTERN}" \
+              --query 'Images[0].ImageId' \
+              --output text)
+            
+            if [ "$AMI_ID" = "None" ] || [ -z "$AMI_ID" ]; then
+              echo "❌ No AMI found for release tag ${{ inputs.ami_release_tag }}"
+              echo "Searching for any AMI with partial name match..."
+              
+              # Try a broader search with wildcard
+              AMI_ID=$(aws ec2 describe-images \
+                --region ${{ secrets.AWS_REGION }} \
+                --owners self \
+                --filters "Name=name,Values=*${{ inputs.ami_release_tag }}*" \
+                --query 'Images | sort_by(@, &CreationDate) | [-1].ImageId' \
+                --output text)
+              
+              if [ "$AMI_ID" = "None" ] || [ -z "$AMI_ID" ]; then
+                echo "❌ No AMI found for release tag ${{ inputs.ami_release_tag }}"
+                exit 1
+              fi
+            fi
+            
+            echo "✅ Found AMI ID: ${AMI_ID}"
+            echo "ami_id=${AMI_ID}" >> $GITHUB_OUTPUT
+          else
+            echo "No AMI release tag specified, using latest recommended AMI from SSM"
+            
+            # Map os_distro to SSM parameter ami-type
+            case "${{ steps.parse.outputs.os_distro }}" in
+              al2)
+                AMI_TYPE="amazon-linux-2"
+                ;;
+              al2023)
+                AMI_TYPE="amazon-linux-2023/x86_64/standard"
+                ;;
+              *)
+                echo "❌ Unknown os_distro: ${{ steps.parse.outputs.os_distro }}"
+                exit 1
+                ;;
+            esac
+            
+            # Get latest recommended AMI ID from SSM Parameter Store
+            SSM_PARAMETER="/aws/service/eks/optimized-ami/${{ steps.parse.outputs.k8s_version }}/${AMI_TYPE}/recommended/image_id"
+            echo "Retrieving AMI ID from SSM parameter: ${SSM_PARAMETER}"
+            
+            AMI_ID=$(aws ssm get-parameter \
+              --name "${SSM_PARAMETER}" \
+              --region ${{ secrets.AWS_REGION }} \
+              --query "Parameter.Value" \
+              --output text)
+            
+            if [ "$AMI_ID" = "None" ] || [ -z "$AMI_ID" ]; then
+              echo "❌ No AMI found in SSM parameter: ${SSM_PARAMETER}"
+              exit 1
+            fi
+            
+            echo "✅ Found latest recommended AMI ID from SSM: ${AMI_ID}"
+            echo "ami_id=${AMI_ID}" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Comment on issue - Starting
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # 7.0.1
+        with:
+          script: |
+            const issueNumber = parseInt('${{ inputs.issue_number }}');
+            const requester = '${{ inputs.requester }}';
+            const uuid = '${{ inputs.uuid }}';
+            const runUrl = '${{ steps.variables.outputs.workflow_run_url }}';
+            
+            const nodeconfig = JSON.parse('${{ inputs.nodeconfig_options }}');
+            const args = JSON.parse('${{ inputs.repro_args }}');
+            
+            let body = `@${requester} 🔬 Starting reproduction for issue #${issueNumber}\n\n`;
+            body += `**Run ID:** \`${uuid}\`\n`;
+            body += `**Workflow:** [View logs](${runUrl})\n`;
+            body += `**Kubernetes Version:** \`${{ steps.parse.outputs.k8s_version }}\`\n`;
+            body += `**OS Distribution:** \`${{ steps.parse.outputs.os_distro }}\`\n`;
+            
+            if ('${{ inputs.ami_release_tag }}') {
+              body += `**AMI Release:** \`${{ inputs.ami_release_tag }}\`\n`;
+              if ('${{ steps.resolve-ami.outputs.ami_id }}') {
+                body += `**AMI ID:** \`${{ steps.resolve-ami.outputs.ami_id }}\`\n`;
+              }
+            }
+            body += "\n";
+            
+            if (Object.keys(nodeconfig).length > 0) {
+              body += "**NodeConfig options:**\n";
+              for (const [key, value] of Object.entries(nodeconfig)) {
+                body += `- \`${key}=${value}\`\n`;
+              }
+              body += "\n";
+            }
+            
+            if (args.length > 0) {
+              body += `**Additional arguments:** ${args.join(' ')}\n\n`;
+            }
+            
+            body += "Setting up reproduction environment...";
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: body
+            });
+
+  reproduce:
+    needs: setup
+    if: always() && needs.setup.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # 4.1.7
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # 4.3.1
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_CI }}
+          # 2.5 hours (reproduction might take longer than regular CI)
+          role-duration-seconds: 9000
+          
+      - name: Determine AMI ID
+        id: ami
+        run: |
+          if [ -n "${{ needs.setup.outputs.ami_id }}" ]; then
+            echo "Using resolved AMI ID: ${{ needs.setup.outputs.ami_id }}"
+            echo "ami_id=${{ needs.setup.outputs.ami_id }}" >> $GITHUB_OUTPUT
+          elif [ -n "${{ needs.build-ami.outputs.ami_id }}" ]; then
+            echo "Using built AMI ID: ${{ needs.build-ami.outputs.ami_id }}"
+            echo "ami_id=${{ needs.build-ami.outputs.ami_id }}" >> $GITHUB_OUTPUT
+          else
+            echo "❌ No AMI ID available"
+            exit 1
+          fi
+          
+      - name: Run reproduction with kubetest2
+        id: kubetest2
+        uses: ./.github/actions/ci/kubetest2-repro
+        with:
+          ami_id: ${{ steps.ami.outputs.ami_id }}
+          k8s_version: ${{ needs.setup.outputs.k8s_version }}
+          os_distro: ${{ needs.setup.outputs.os_distro }}
+          build_id: "repro-${{ inputs.issue_number }}-${{ inputs.uuid }}"
+          aws_region: ${{ secrets.AWS_REGION }}
+          log_bucket: ${{ secrets.CI_LOG_BUCKET }}
+          nodeconfig_options: ${{ inputs.nodeconfig_options }}
+          issue_number: ${{ inputs.issue_number }}
+          additional_arguments: "--repro-mode"
+          
+      - name: Report results
+        if: always()
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # 7.0.1
+        with:
+          script: |
+            const issueNumber = parseInt('${{ inputs.issue_number }}');
+            const requester = '${{ inputs.requester }}';
+            const uuid = '${{ inputs.uuid }}';
+            const runUrl = '${{ needs.setup.outputs.workflow_run_url }}';
+            const reproResult = '${{ steps.kubetest2.outcome }}';
+            
+            const statusEmojis = {
+              "success": "✅",
+              "failure": "❌",
+              "cancelled": "🚮",
+              "skipped": "⏭️"
+            };
+            
+            let body = `@${requester} 🔬 Reproduction completed for issue #${issueNumber}\n\n`;
+            body += `**Run ID:** \`${uuid}\`\n`;
+            body += `**Status:** ${statusEmojis[reproResult] || "❓"} ${reproResult}\n`;
+            body += `**AMI ID:** \`${{ steps.ami.outputs.ami_id }}\`\n`;
+            body += `**Logs:** [View workflow logs](${runUrl})\n\n`;
+            
+            if (reproResult === 'success') {
+              body += "✅ **Reproduction completed successfully!**\n\n";
+              body += "The issue reproduction environment was set up and tests passed. ";
+              body += "This suggests the issue may be resolved or requires different conditions to reproduce.";
+            } else if (reproResult === 'failure') {
+              body += "❌ **Reproduction failed!**\n\n";
+              body += "The reproduction environment encountered issues. This could indicate:\n";
+              body += "- The reported issue is reproducible\n";
+              body += "- There are configuration problems\n";
+              body += "- Infrastructure issues\n\n";
+              body += "Please check the workflow logs for detailed error information.";
+            } else {
+              body += `**Status:** ${reproResult}\n\n`;
+              body += "Please check the workflow logs for more information.";
+            }
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: body
+            });

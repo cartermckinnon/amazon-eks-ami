@@ -1,0 +1,104 @@
+name: '[CI] Integration test / kubetest2 (Reproduction Mode)'
+inputs:
+  build_id:
+    required: true
+    type: string
+  ami_id:
+    required: true
+    type: string
+  os_distro:
+    required: true
+    type: string
+  k8s_version:
+    required: true
+    type: string
+  aws_region:
+    required: true
+    type: string
+  log_bucket:
+    required: true
+    type: string
+  additional_arguments:
+    required: false
+    type: string
+  nodeconfig_options:
+    required: false
+    type: string
+    default: '{}'
+  issue_number:
+    required: false
+    type: string
+runs:
+  using: "composite"
+  steps:
+    - id: kubetest2-repro
+      shell: bash
+      run: |
+        export PATH=${PATH}:$(go env GOPATH)/bin
+        # old versions of packages are sometimes cached by the proxy, just disable it
+        GOPROXY=direct
+        go install sigs.k8s.io/kubetest2/...@latest
+        go install github.com/aws/aws-k8s-tester/...@HEAD
+
+        case "${{ inputs.os_distro }}" in
+          al2)
+            KUBETEST2_ARGS="--user-data-format=bootstrap.sh"
+            ;;
+          al2023)
+            KUBETEST2_ARGS="--user-data-format=nodeadm"
+            ;;
+          *)
+            echo >&2 "unknown os_distro: ${{ inputs.os_distro }}"
+            exit 1
+          ;;
+        esac
+
+        # Add NodeConfig options to user data if provided
+        if [ "${{ inputs.nodeconfig_options }}" != "{}" ] && [ -n "${{ inputs.nodeconfig_options }}" ]; then
+          echo "Adding NodeConfig options to kubetest2 arguments"
+          KUBETEST2_ARGS="${KUBETEST2_ARGS} --nodeconfig-options='${{ inputs.nodeconfig_options }}'"
+        fi
+
+        if [ ! "${{ inputs.additional_arguments }}" = "" ]; then
+          KUBETEST2_ARGS="${KUBETEST2_ARGS} ${{ inputs.additional_arguments }}"
+        fi
+
+        # Use a more focused test suite for reproductions
+        TESTER_NAME=ginkgo
+        # k8s_version below 1.26 use the older ginkgo tester
+        if [ "${{ inputs.k8s_version }}" = "$(echo -e "${{ inputs.k8s_version }}\n1.26" | sort -V | head -n1)" ]; then
+          TESTER_NAME=ginkgo-v1
+        fi
+
+        # For reproductions, we want to run a broader set of tests to catch issues
+        # but still focus on the most relevant ones
+        FOCUS_REGEX='\[Conformance\]|\[NodeConformance\]'
+        SKIP_REGEX='\[Serial\]|\[Disruptive\]|\[Slow\]|Garbage.collector'
+        
+        # If this is for a specific issue, we might want to adjust the test focus
+        if [ -n "${{ inputs.issue_number }}" ]; then
+          echo "Running reproduction for issue #${{ inputs.issue_number }}"
+          # TODO: Add issue-specific test focusing logic here
+          # For now, we'll run the standard conformance tests
+        fi
+
+        set -o xtrace
+
+        kubetest2 eksapi \
+          --up \
+          --down \
+          --emit-metrics \
+          --log-bucket=${{ inputs.log_bucket }} \
+          --kubernetes-version=${{ inputs.k8s_version }} \
+          --unmanaged-nodes \
+          --ami=${{ inputs.ami_id }} \
+          --region=${{ inputs.aws_region }} \
+          --cluster-name="repro-${{ inputs.build_id }}" \
+          --nodegroup-name="repro-nodes-${{ inputs.build_id }}" \
+          $KUBETEST2_ARGS \
+          --test=$TESTER_NAME \
+          -- \
+          --test-package-marker=latest-${{ inputs.k8s_version }}.txt \
+          --parallel=4 \
+          --focus-regex="$FOCUS_REGEX" \
+          --skip-regex="$SKIP_REGEX"

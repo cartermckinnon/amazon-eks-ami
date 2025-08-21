@@ -119,6 +119,8 @@ function buildCommand(uuid, payload, name, args) {
             return new ClearCommand(uuid, payload, args);
         case "ci":
             return new CICommand(uuid, payload, args);
+        case "repro":
+            return new ReproCommand(uuid, payload, args);
         default:
             console.log(`Unknown command: ${name}`);
             return null;
@@ -187,6 +189,7 @@ class CICommand {
         this.comment_url = payload.comment.html_url;
         this.comment_created_at = payload.comment.created_at;
         this.uuid = uuid;
+        this.is_pull_request = !!payload.issue.pull_request;
         this.goal = "test";
         // "test" goal, which executes all CI stages, is the default when no goal is specified
         if (args != null && args !== "") {
@@ -233,6 +236,11 @@ class CICommand {
     }
 
     async run(author, github) {
+        // Only allow /ci on pull requests, not issues
+        if (!this.is_pull_request) {
+            return `@${author} the \`/ci\` command can only be used on pull requests, not issues. Use \`/repro\` for issue reproduction.`;
+        }
+
         const pr = await github.rest.pulls.get({
             owner: this.repository_owner,
             repo: this.repository_name,
@@ -289,6 +297,108 @@ class CICommand {
     }
 }
 
+class ReproCommand {
+    constructor(uuid, payload, args) {
+        this.repository_owner = payload.repository.owner.login;
+        this.repository_name = payload.repository.name;
+        this.issue_number = payload.issue.number;
+        this.comment_url = payload.comment.html_url;
+        this.comment_created_at = payload.comment.created_at;
+        this.uuid = uuid;
+        this.is_pull_request = !!payload.issue.pull_request;
+        this.nodeconfig_options = {};
+        this.repro_args = args ? args.split(/\s+/) : [];
+    }
+
+    addNamedArguments(name, args) {
+        if (name === 'nodeconfig') {
+            // Parse nodeconfig arguments in the format "key=value"
+            if (args && args.includes('=')) {
+                const [key, value] = args.split('=', 2);
+                this.nodeconfig_options[key.trim()] = value.trim();
+                console.log(`Added NodeConfig option: ${key.trim()}=${value.trim()}`);
+            } else {
+                console.log(`Invalid nodeconfig format: ${args}`);
+            }
+        } else if (name === 'ami') {
+            // Parse AMI release tag (e.g., v20250704)
+            this.ami_release_tag = args ? args.trim() : null;
+            console.log(`Set AMI release tag: ${this.ami_release_tag}`);
+        } else {
+            console.log(`Unknown named argument for repro command: ${name}`);
+        }
+    }
+
+    async run(author, github) {
+        // Only allow /repro on issues, not PRs
+        if (this.is_pull_request) {
+            return `@${author} the \`/repro\` command can only be used on issues, not pull requests. Use \`/ci\` for pull request testing.`;
+        }
+
+        const reproConfig = {
+            uuid: this.uuid,
+            issue_number: this.issue_number.toString(),
+            requester: author,
+            comment_url: this.comment_url,
+            nodeconfig_options: this.nodeconfig_options,
+            repro_args: this.repro_args
+        };
+
+        console.log(`Reproduction request for issue #${this.issue_number}:`);
+        console.log(`NodeConfig options: ${JSON.stringify(this.nodeconfig_options)}`);
+        console.log(`Additional args: ${JSON.stringify(this.repro_args)}`);
+
+        // For now, just acknowledge the command and show what was parsed
+        let response = `@${author} 🔬 Reproduction request received for issue #${this.issue_number}\n\n`;
+        
+        if (Object.keys(this.nodeconfig_options).length > 0) {
+            response += "**NodeConfig options:**\n";
+            for (const [key, value] of Object.entries(this.nodeconfig_options)) {
+                response += `- \`${key}=${value}\`\n`;
+            }
+            response += "\n";
+        }
+
+        if (this.repro_args.length > 0) {
+            response += `**Additional arguments:** ${this.repro_args.join(' ')}\n\n`;
+        }
+
+        if (this.ami_release_tag) {
+            response += `**AMI Release:** \`${this.ami_release_tag}\`\n\n`;
+        }
+
+        response += "The reproduction environment will be set up with the specified configuration. ";
+        response += "A reproduction workflow has been triggered - check back for updates!";
+
+        const workflowInputs = {
+            uuid: reproConfig.uuid,
+            issue_number: reproConfig.issue_number,
+            requester: reproConfig.requester,
+            comment_url: reproConfig.comment_url,
+            nodeconfig_options: JSON.stringify(reproConfig.nodeconfig_options),
+            repro_args: JSON.stringify(reproConfig.repro_args),
+            ami_release_tag: this.ami_release_tag || ''
+        };
+
+        console.log(`Dispatching reproduction workflow with inputs: ${JSON.stringify(workflowInputs)}`);
+        
+        try {
+            await github.rest.actions.createWorkflowDispatch({
+                owner: this.repository_owner,
+                repo: this.repository_name,
+                workflow_id: 'repro.yaml',
+                ref: 'main',
+                inputs: workflowInputs
+            });
+            console.log('Successfully dispatched reproduction workflow');
+        } catch (error) {
+            console.error('Failed to dispatch reproduction workflow:', error);
+            response += '\n\n⚠️ Note: Failed to trigger reproduction workflow. Please check the logs for details.';
+        }
+
+        return response;
+    }
+}
 
 module.exports = async (core, github, context, uuid) => {
     bot(core, github, context, uuid).catch((error) => {
